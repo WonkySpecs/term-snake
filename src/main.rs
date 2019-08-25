@@ -1,61 +1,98 @@
 use std::time::Duration;
-use std::thread;
+use std::{thread, io};
+use termion::raw::IntoRawMode;
 use termion::event::Key;
 use termion::input::TermRead;
-use termion::raw::IntoRawMode;
-use std::io::{Write, stdout, stdin, Read};
-use std::iter::Map;
-use std::collections::HashMap;
 use termion::AsyncReader;
+use termion::input::Keys;
+use std::io::{Write, stdout, stdin, Read};
+use std::collections::HashMap;
+use rand::{thread_rng, Rng};
 
 extern crate termion;
 
 const FRAME_DELAY_MS: u64 = 100;
+const STARTING_LENGTH: u16 = 5;
 
 fn main() {
     let mut stdin = termion::async_stdin();
-    // Get the standard output stream and go to raw mode.
     let mut stdout = stdout().into_raw_mode().unwrap();
-    let mut grid = starting_position();
     let mut head_pos = (HEIGHT / 2, WIDTH / 2);
     let mut head_dir = MoveDir::Up;
-    let mut c = 0;
     let mut score = 0;
+    let mut snake_length = STARTING_LENGTH;
+    let mut rng = rand::thread_rng();
+    let pellet_pos = (rng.gen_range(1, WIDTH - 1) as u16,
+                      rng.gen_range(1, HEIGHT - 1) as u16);
+    let mut grid = starting_position(&pellet_pos);
     const INFO_LINE: u16 = HEIGHT as u16 + 1;
-    write!(stdout, "{}", termion::cursor::Hide);
+    write!(stdout, "{}", termion::cursor::Hide).unwrap();
     loop {
         write!(stdout, "{}{}",
                termion::cursor::Goto(1, 1),
-               termion::clear::All);
+               termion::clear::All).unwrap();
         let buf = draw_buffer(grid);
         for j in 0..HEIGHT {
-            write!(stdout, "{}{}", termion::cursor::Goto(1, j as u16 + 1), buf[j].join(""));
+            write!(stdout, "{}{}",
+                   termion::cursor::Goto(1, j as u16 + 1),
+                   buf[j].join("")).unwrap();
         }
-        write!(stdout, "{}{}{}wasd to move, q to quit {:?}",
+        write!(stdout, "{}{}{}wasd to move, q to quit",
                termion::cursor::Goto(1, INFO_LINE),
                score,
-               termion::cursor::Goto(WIDTH as u16 / 3, INFO_LINE),
-               head_dir);
+               termion::cursor::Goto(WIDTH as u16 / 3, INFO_LINE)).unwrap();
 
         if let Some(movement) = get_direction(head_dir, &mut stdin) {
             head_dir = movement;
-            head_pos = next_head_position(head_pos, movement, &mut stdin);
-
-            grid[head_pos.0][head_pos.1] = GameObj {
-                obj_type: ObjType::Snake,
-                duration: Option::Some(1),
-                direction: Option::Some(SegmentDir::NS),
+            let next_head_pos = next_head_position(
+                head_pos,
+                movement,
+                &mut stdin);
+            match grid[next_head_pos.0][next_head_pos.1].obj_type {
+                ObjType::Snake => break,
+                ObjType::Food => {
+                    score += snake_length;
+                    snake_length += 1;
+                    let pellet_pos = (rng.gen_range(1, WIDTH - 1) as u16,
+                                      rng.gen_range(1, HEIGHT - 1) as u16);
+                    grid[pellet_pos.1 as usize][pellet_pos.0 as usize] = GameObj::permanent(
+                        ObjType::Food,
+                        Option::None);
+                },
+                _ => ()
             };
-            stdout.flush().unwrap();
-            thread::sleep(Duration::from_millis(FRAME_DELAY_MS));
+            head_pos = next_head_pos;
         } else {
             break;
         }
+
+        update_durations(&mut grid);
+
+        grid[head_pos.0][head_pos.1] = GameObj {
+            obj_type: ObjType::Snake,
+            duration: Option::Some(snake_length),
+            direction: Option::Some(SegmentDir::NS),
+        };
+        stdout.flush().unwrap();
+        thread::sleep(Duration::from_millis(FRAME_DELAY_MS));
     }
-    write!(stdout, "{}{}{}",
+
+    write!(stdout, "{}{}Your final score was:{}{}Try (a)gain, or (q)uit?",
            termion::cursor::Goto(1, 1),
            termion::clear::All,
-           termion::cursor::Show);
+           score,
+           termion::cursor::Goto(1, 2)).unwrap();
+    stdout.flush().unwrap();
+    let stdin = io::stdin();
+    for c in stdin.keys() {
+        match c.unwrap() {
+            Key::Char('q') => println!("Quitting..."),
+            _ => println!("jk just run again")
+        }
+        break;
+    }
+
+    write!(stdout, "{}", termion::cursor::Show).unwrap();
 }
 
 const WIDTH: usize = 40;
@@ -90,7 +127,8 @@ impl GameObj {
         match self.obj_type {
             ObjType::Empty => ".",
             ObjType::Wall => get_wall_icon(self.direction),
-            _ => "x"
+            ObjType::Snake => "x",
+            ObjType::Food => "O"
         }
     }
 }
@@ -146,7 +184,7 @@ fn get_wall_icon(dir: Option<SegmentDir>) -> &'static str {
     }
 }
 
-fn starting_position() -> [[GameObj; WIDTH]; HEIGHT] {
+fn starting_position(starting_pellet: &(u16, u16)) -> [[GameObj; WIDTH]; HEIGHT] {
     let mut grid: [[GameObj; WIDTH]; HEIGHT] =
         [[GameObj::blank(); WIDTH]; HEIGHT];
     let h_wall = GameObj::permanent(
@@ -182,8 +220,12 @@ fn starting_position() -> [[GameObj; WIDTH]; HEIGHT] {
     grid[HEIGHT / 2][WIDTH / 2] = GameObj {
         obj_type: ObjType::Snake,
         direction: Option::Some(SegmentDir::NS),
-        duration: Option::None,
+        duration: Option::Some(STARTING_LENGTH),
     };
+
+    grid[starting_pellet.1 as usize][starting_pellet.0 as usize] = GameObj::permanent(
+        ObjType::Food,
+        Option::None);
 
     grid
 }
@@ -191,7 +233,7 @@ fn starting_position() -> [[GameObj; WIDTH]; HEIGHT] {
 fn get_direction(cur_dir: MoveDir,
                  input_reader: &mut AsyncReader) -> Option<MoveDir> {
     let mut inputs: Vec<u8> = Vec::new();
-    input_reader.read_to_end(&mut inputs);
+    input_reader.read_to_end(&mut inputs).unwrap();
     if let Some(last_input) = inputs.last() {
         Option::Some(match last_input {
             b'q' => return Option::None,
@@ -233,4 +275,19 @@ fn next_head_position(cur_pos: (usize, usize),
     }
 
     (new_head_pos.0 as usize, new_head_pos.1 as usize)
+}
+
+fn update_durations(grid: &mut [[GameObj; WIDTH]; HEIGHT]) {
+    for j in 0..HEIGHT {
+        for i in 0..WIDTH {
+            if let Some(dur) = grid[j][i].duration {
+                let next_dur = dur - 1;
+                if next_dur < 1 {
+                    grid[j][i] = GameObj::blank();
+                } else {
+                    grid[j][i].duration = Option::Some(next_dur);
+                }
+            }
+        }
+    }
 }
