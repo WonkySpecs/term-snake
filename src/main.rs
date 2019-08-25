@@ -8,6 +8,7 @@ use termion::input::Keys;
 use std::io::{Write, stdout, stdin, Read};
 use std::collections::HashMap;
 use rand::{thread_rng, Rng};
+use rand::prelude::ThreadRng;
 
 extern crate termion;
 
@@ -22,8 +23,7 @@ fn main() {
     let mut score = 0;
     let mut snake_length = STARTING_LENGTH;
     let mut rng = rand::thread_rng();
-    let pellet_pos = (rng.gen_range(1, WIDTH - 1) as u16,
-                      rng.gen_range(1, HEIGHT - 1) as u16);
+    let pellet_pos = random_pos(&mut rng);
     let mut grid = starting_position(&pellet_pos);
     const INFO_LINE: u16 = HEIGHT as u16 + 1;
     write!(stdout, "{}", termion::cursor::Hide).unwrap();
@@ -51,14 +51,16 @@ fn main() {
             match grid[next_head_pos.0][next_head_pos.1].obj_type {
                 ObjType::Snake => break,
                 ObjType::Food => {
-                    score += snake_length;
+                    score += 1;
                     snake_length += 1;
-                    let pellet_pos = (rng.gen_range(1, WIDTH - 1) as u16,
-                                      rng.gen_range(1, HEIGHT - 1) as u16);
-                    grid[pellet_pos.1 as usize][pellet_pos.0 as usize] = GameObj::permanent(
+                    let pellet_pos = random_pos(&mut rng);
+                    while grid[pellet_pos.1][pellet_pos.0].obj_type != ObjType::Empty {
+                        let pellet_pos = random_pos(&mut rng);
+                    }
+                    grid[pellet_pos.1][pellet_pos.0] = GameObj::permanent(
                         ObjType::Food,
                         Option::None);
-                },
+                }
                 _ => ()
             };
             head_pos = next_head_pos;
@@ -184,7 +186,7 @@ fn get_wall_icon(dir: Option<SegmentDir>) -> &'static str {
     }
 }
 
-fn starting_position(starting_pellet: &(u16, u16)) -> [[GameObj; WIDTH]; HEIGHT] {
+fn starting_position(starting_pellet: &(usize, usize)) -> [[GameObj; WIDTH]; HEIGHT] {
     let mut grid: [[GameObj; WIDTH]; HEIGHT] =
         [[GameObj::blank(); WIDTH]; HEIGHT];
     let h_wall = GameObj::permanent(
@@ -223,7 +225,7 @@ fn starting_position(starting_pellet: &(u16, u16)) -> [[GameObj; WIDTH]; HEIGHT]
         duration: Option::Some(STARTING_LENGTH),
     };
 
-    grid[starting_pellet.1 as usize][starting_pellet.0 as usize] = GameObj::permanent(
+    grid[starting_pellet.1][starting_pellet.0] = GameObj::permanent(
         ObjType::Food,
         Option::None);
 
@@ -290,4 +292,9 @@ fn update_durations(grid: &mut [[GameObj; WIDTH]; HEIGHT]) {
             }
         }
     }
+}
+
+fn random_pos(rng: &mut ThreadRng) -> (usize, usize) {
+    (rng.gen_range(1, WIDTH - 1),
+     rng.gen_range(1, HEIGHT - 1))
 }
