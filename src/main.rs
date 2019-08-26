@@ -4,10 +4,9 @@ use termion::raw::IntoRawMode;
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::AsyncReader;
-use termion::input::Keys;
-use std::io::{Write, stdout, stdin, Read};
+use std::io::{Write, stdout, Read};
 use std::collections::HashMap;
-use rand::{thread_rng, Rng};
+use rand::{Rng};
 use rand::prelude::ThreadRng;
 
 extern crate termion;
@@ -25,8 +24,7 @@ fn main() {
     let mut score = 0;
     let mut snake_length = STARTING_LENGTH;
     let mut rng = rand::thread_rng();
-    let pellet_pos = random_pos(&mut rng);
-    let mut grid = starting_position(&pellet_pos);
+    let mut grid = starting_position(&random_pos(&mut rng));
     const INFO_LINE: u16 = HEIGHT as u16 + 1;
     write!(stdout, "{}", termion::cursor::Hide).unwrap();
     loop {
