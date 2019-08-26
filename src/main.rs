@@ -257,24 +257,16 @@ fn next_head_position(cur_pos: (usize, usize),
         MoveDir::Up => (-1, 0),
         MoveDir::Down => (1, 0),
     };
-
-    let mut new_head_pos =
-        (cur_pos.0 as i8 + head_movement.0,
-         cur_pos.1 as i8 + head_movement.1);
-    // There's probably a nice way of doing this with modular arithmetic but cba
-    if new_head_pos.0 < 1 {
-        new_head_pos.0 = HEIGHT as i8 - 2;
-    } else if new_head_pos.0 > HEIGHT as i8 - 2 {
-        new_head_pos.0 = 1;
+ 
+    // % operator is remainder, not modulus, so have to handle negative case separately
+    if cur_pos.0 as i8 + head_movement.0 == 0 {
+	(HEIGHT - 2, cur_pos.1)
+    } else if cur_pos.1 as i8 + head_movement.1 == 0 {
+	(cur_pos.0, WIDTH - 2)
+    } else {
+	((cur_pos.0 as i8 - 1 + head_movement.0) as usize % (HEIGHT - 2) + 1,
+	 (cur_pos.1 as i8 - 1 + head_movement.1) as usize % (WIDTH - 2) + 1)
     }
-
-    if new_head_pos.1 < 1 {
-        new_head_pos.1 = WIDTH as i8 - 2;
-    } else if new_head_pos.1 > WIDTH as i8 - 2 {
-        new_head_pos.1 = 1;
-    }
-
-    (new_head_pos.0 as usize, new_head_pos.1 as usize)
 }
 
 fn update_durations(grid: &mut [[GameObj; WIDTH]; HEIGHT]) {
