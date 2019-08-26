@@ -14,6 +14,8 @@ extern crate termion;
 
 const FRAME_DELAY_MS: u64 = 100;
 const STARTING_LENGTH: u16 = 5;
+const WIDTH: usize = 20;
+const HEIGHT: usize = 16;
 
 fn main() {
     let mut stdin = termion::async_stdin();
@@ -96,10 +98,6 @@ fn main() {
 
     write!(stdout, "{}", termion::cursor::Show).unwrap();
 }
-
-const WIDTH: usize = 40;
-
-const HEIGHT: usize = 30;
 
 #[derive(Copy, Clone)]
 struct GameObj {
